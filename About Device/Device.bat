@@ -9,5 +9,7 @@ systeminfo | findstr /C:"Total Physical Memory" /C:"Available Physical Memory"
 @REM CPU/Memory Info
 wmic cpu get name, maxclockspeed
 wmic memorychip get capacity, speed
-
+@REM OS Info
+systeminfo | findstr /B /C:"OS Name" /C:"OS Version"
+@REM User Info
 pause
