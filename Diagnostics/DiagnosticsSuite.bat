@@ -1,247 +1,275 @@
 @echo off
 setlocal enabledelayedexpansion
-color 0E
-title Advanced Windows System Diagnostics
+title Windows System Diagnostics - Professional Edition
+color 03
 
 net session >nul 2>&1
-if %errorLevel% neq 0 (
-    echo Administrator privileges required.
+if errorlevel 1 (
+    echo ERROR: Run as Administrator
     pause
-    exit /b 1
+    exit
 )
 
 cls
 echo.
-echo ╔═══════════════════════════════════════════════════════════════════════════════╗
-echo ║                        ADVANCED SYSTEM DIAGNOSTICS                           ║
-echo ╚═══════════════════════════════════════════════════════════════════════════════╝
+echo =============================================================================
+echo                           WINDOWS SYSTEM DIAGNOSTICS
+echo =============================================================================
 echo.
 
-:: System Information
-echo ┌─ SYSTEM OVERVIEW ─────────────────────────────────────────────────────────────┐
-for /f "tokens=2 delims=:" %%i in ('systeminfo ^| findstr /i "OS Name"') do set "osname=%%i"
-for /f "tokens=2 delims=:" %%i in ('systeminfo ^| findstr /i "OS Version"') do set "osver=%%i"
-for /f "tokens=2 delims=:" %%i in ('systeminfo ^| findstr /i "System Model"') do set "model=%%i"
-for /f "tokens=2 delims=:" %%i in ('systeminfo ^| findstr /i "System Type"') do set "arch=%%i"
-for /f "tokens=2 delims=:" %%i in ('systeminfo ^| findstr /i "Total Physical Memory"') do set "ram=%%i"
-for /f "tokens=2 delims=:" %%i in ('systeminfo ^| findstr /i "System Boot Time"') do set "boottime=%%i"
-
-echo   OS:%osname%
-echo   Version:%osver%
-echo   Model:%model%
-echo   Architecture:%arch%
-echo   RAM:%ram%
-echo   Last Boot:%boottime%
-echo └───────────────────────────────────────────────────────────────────────────────┘
+echo [SYSTEM INFORMATION]
+echo -----------------------------------------------------------------------------
+systeminfo | findstr /C:"OS Name" /C:"OS Version" /C:"System Type" /C:"Total Physical Memory" /C:"System Model" /C:"System Manufacturer" /C:"BIOS Version" /C:"System Boot Time"
+echo.
+echo Computer Serial Number:
+wmic bios get SerialNumber /format:list | find "="
+echo.
+echo System UUID:
+wmic csproduct get UUID /format:list | find "="
 echo.
 
-:: CPU Details
-echo ┌─ CPU ANALYSIS ────────────────────────────────────────────────────────────────┐
-for /f "tokens=2 delims==" %%i in ('wmic cpu get name /value ^| find "="') do set "cpuname=%%i"
-for /f "tokens=2 delims==" %%i in ('wmic cpu get maxclockspeed /value ^| find "="') do set "cpuspeed=%%i"
-for /f "tokens=2 delims==" %%i in ('wmic cpu get numberofcores /value ^| find "="') do set "cores=%%i"
-for /f "tokens=2 delims==" %%i in ('wmic cpu get numberoflogicalprocessors /value ^| find "="') do set "threads=%%i"
-for /f "tokens=2 delims==" %%i in ('wmic cpu get loadpercentage /value ^| find "="') do set "cpuload=%%i"
-
-echo   Processor: %cpuname%
-echo   Base Clock: %cpuspeed% MHz
-echo   Cores: %cores% ^| Threads: %threads%
-echo   Current Load: %cpuload%%%
+echo [HARDWARE DETAILS]
+echo -----------------------------------------------------------------------------
+echo CPU Information:
+wmic cpu get Name,NumberOfCores,NumberOfLogicalProcessors,MaxClockSpeed,ProcessorId,Manufacturer /format:table
+echo.
+echo CPU Serial Numbers:
+wmic cpu get ProcessorId,SerialNumber /format:list | find "="
+echo.
+echo Memory Modules:
+wmic memorychip get Capacity,Speed,Manufacturer,PartNumber,SerialNumber,DeviceLocator,BankLabel /format:table
+echo.
+echo Memory Serial Numbers:
+wmic memorychip get DeviceLocator,SerialNumber,PartNumber /format:list | find "="
+echo.
+echo Motherboard:
+wmic baseboard get Product,Manufacturer,SerialNumber,Version /format:table
+echo.
+echo Graphics Cards:
+wmic path win32_videocontroller get Name,DriverVersion,DriverDate,AdapterRAM,Status /format:table
+echo.
+echo Graphics Card Details:
+wmic path win32_videocontroller get Name,PNPDeviceID /format:list | find "="
+echo.
+echo Sound Devices:
+wmic sounddev get Name,Manufacturer,Status /format:table
 echo.
 
-:: Check CPU features
-echo   Features:
-wmic cpu get virtualizationFirmwareEnabled,vmmonitormodeextensions,secondleveladdresstranslationextensions /format:list | findstr /v "^$"
-echo └───────────────────────────────────────────────────────────────────────────────┘
+echo [STORAGE INFORMATION]
+echo -----------------------------------------------------------------------------
+echo Physical Disks:
+wmic diskdrive get Model,Size,InterfaceType,SerialNumber,Status,MediaType /format:table
 echo.
-
-:: Memory Analysis
-echo ┌─ MEMORY ANALYSIS ─────────────────────────────────────────────────────────────┐
-for /f "tokens=2 delims==" %%i in ('wmic OS get TotalVisibleMemorySize /value ^| find "="') do set /a "totalmem=%%i/1024"
-for /f "tokens=2 delims==" %%i in ('wmic OS get FreePhysicalMemory /value ^| find "="') do set /a "freemem=%%i/1024"
-set /a "usedmem=%totalmem%-%freemem%"
-set /a "mempercent=(%usedmem%*100)/%totalmem%"
-
-echo   Total RAM: %totalmem% MB
-echo   Used: %usedmem% MB (%mempercent%%%)
-echo   Free: %freemem% MB
+echo Disk Serial Numbers:
+wmic diskdrive get Model,SerialNumber /format:list | find "="
 echo.
-echo   Memory Modules:
-wmic memorychip get capacity,speed,manufacturer,partnumber,devicelocator /format:table | findstr /v "^$"
-echo └───────────────────────────────────────────────────────────────────────────────┘
+echo Disk Health (SMART Status):
+wmic diskdrive get Status,Model /format:list | find "="
 echo.
-
-:: Storage Analysis
-echo ┌─ STORAGE ANALYSIS ────────────────────────────────────────────────────────────┐
-echo   Physical Drives:
-for /f "skip=1 tokens=1,2,3,4" %%a in ('wmic diskdrive get model^,size^,interfacetype^,status') do (
-    if "%%a" neq "" (
-        set /a "size=%%b/1073741824" 2>nul
-        if !size! gtr 0 echo     %%a - !size! GB ^(%%c^) - %%d
+echo Logical Disks:
+wmic logicaldisk get Size,FreeSpace,Caption,FileSystem,VolumeSerialNumber /format:table
+echo.
+echo Disk Usage:
+for /f "tokens=1,2,3" %%a in ('wmic logicaldisk get size^,freespace^,caption /format:csv ^| find ":"') do (
+    set /a total=%%c/1073741824 2>nul
+    set /a free=%%b/1073741824 2>nul  
+    set /a used=!total!-!free! 2>nul
+    if !total! GTR 0 (
+        set /a percent=!used!*100/!total! 2>nul
+        echo Drive %%a: !used!GB/!total!GB used (!percent!%%)
     )
 )
 echo.
-echo   Logical Drives:
-for /f "tokens=1,2,3,4" %%a in ('wmic logicaldisk get caption^,size^,freespace^,filesystem') do (
-    if "%%a" neq "" if "%%a" neq "Caption" (
-        set /a "total=%%b/1073741824" 2>nul
-        set /a "free=%%c/1073741824" 2>nul
-        set /a "used=!total!-!free!" 2>nul
-        if !total! gtr 0 (
-            set /a "percent=(!used!*100)/!total!" 2>nul
-            echo     %%a !used!/!total! GB ^(!percent!%% used^) - %%d
-        )
-    )
+
+echo [NETWORK CONFIGURATION]
+echo -----------------------------------------------------------------------------
+echo Network Adapters:
+wmic path win32_networkadapter where NetConnectionStatus=2 get Name,MACAddress,Speed,AdapterType /format:table
+echo.
+echo Network Adapter Details:
+wmic path win32_networkadapter where NetConnectionStatus=2 get Name,MACAddress,PNPDeviceID /format:list | find "="
+echo.
+echo IP Configuration:
+ipconfig /all | findstr /C:"Ethernet adapter" /C:"Wireless" /C:"IPv4" /C:"Subnet Mask" /C:"Default Gateway" /C:"DNS Servers" /C:"Physical Address"
+echo.
+
+echo [PERFORMANCE METRICS]
+echo -----------------------------------------------------------------------------
+echo Current CPU Usage:
+wmic cpu get LoadPercentage /format:list | find "="
+echo.
+echo Memory Usage:
+for /f "tokens=2 delims==" %%i in ('wmic OS get TotalVisibleMemorySize /value 2^>nul') do set totalMem=%%i
+for /f "tokens=2 delims==" %%i in ('wmic OS get FreePhysicalMemory /value 2^>nul') do set freeMem=%%i
+if defined totalMem if defined freeMem (
+    set /a usedMem=%totalMem%-%freeMem% 2>nul
+    set /a memPercent=%usedMem%*100/%totalMem% 2>nul
+    echo Total Memory: %totalMem% KB
+    echo Used Memory: %usedMem% KB (%memPercent%%%)
+    echo Free Memory: %freeMem% KB
+) else (
+    echo Memory information unavailable
 )
-echo └───────────────────────────────────────────────────────────────────────────────┘
+echo.
+echo Process Count:
+tasklist /fo csv | find /c """" 2>nul
 echo.
 
-:: Network Analysis
-echo ┌─ NETWORK ANALYSIS ────────────────────────────────────────────────────────────┐
-echo   Active Network Adapters:
-for /f "skip=1 tokens=1,2,3" %%a in ('wmic path win32_networkadapter where "NetConnectionStatus=2" get name^,macaddress^,speed') do (
-    if "%%a" neq "" if "%%b" neq "" (
-        echo     %%a
-        echo       MAC: %%b
-        if "%%c" neq "" (
-            set /a "speed=%%c/1000000" 2>nul
-            if !speed! gtr 0 echo       Speed: !speed! Mbps
-        )
-    )
+echo [BATTERY INFORMATION]
+echo -----------------------------------------------------------------------------
+echo Battery Details:
+wmic path win32_battery get Name,DeviceID,BatteryStatus,EstimatedChargeRemaining,EstimatedRunTime,FullChargeCapacity,DesignCapacity /format:table 2>nul || echo No battery detected
+echo.
+echo Battery Chemistry and Health:
+wmic path win32_battery get Chemistry,DesignVoltage,ExpectedLife /format:list 2>nul | find "=" || echo No battery detected
+echo.
+echo Power Supply Info:
+wmic path win32_battery get Availability,PowerManagementCapabilities /format:list 2>nul | find "=" || echo No battery detected
+echo.
+echo Battery Status Codes:
+echo   1 = Other, 2 = Unknown, 3 = Fully Charged, 4 = Low, 5 = Critical
+echo   6 = Charging, 7 = Charging and High, 8 = Charging and Low, 9 = Charging and Critical
+echo   10 = Undefined, 11 = Partially Charged
+echo.
+
+echo [CRITICAL SERVICES STATUS]
+echo -----------------------------------------------------------------------------
+for %%s in ("Themes" "Spooler" "DHCP" "DNS" "Workstation" "Server" "EventLog" "PlugPlay" "RpcSs" "Winmgmt" "Windows Update" "Windows Defender" "Windows Time") do (
+    sc query %%s 2>nul | findstr "STATE" | findstr "RUNNING" >nul && echo %%s: RUNNING || echo %%s: STOPPED
 )
 echo.
-echo   IP Configuration:
-ipconfig | findstr /i "adapter ethernet wireless" -A 3
-echo └───────────────────────────────────────────────────────────────────────────────┘
+
+echo [SECURITY STATUS]
+echo -----------------------------------------------------------------------------
+echo Windows Defender Status:
+powershell -ExecutionPolicy Bypass -Command "try { Get-MpComputerStatus | Select-Object RealTimeProtectionEnabled,AntivirusEnabled,OnAccessProtectionEnabled,IoavProtectionEnabled,BehaviorMonitorEnabled,AntivirusSignatureLastUpdated | Format-List } catch { Write-Host 'Windows Defender info unavailable' }" 2>nul
+echo.
+echo Firewall Profiles:
+netsh advfirewall show allprofiles state
+echo.
+echo User Account Information:
+whoami /all | findstr /C:"User Name" /C:"SID" /C:"Privilege Name"
+echo.
+echo BitLocker Status:
+manage-bde -status 2>nul || echo BitLocker status unavailable
 echo.
 
-:: Performance Monitoring
-echo ┌─ PERFORMANCE METRICS ─────────────────────────────────────────────────────────┐
-echo   Real-time Performance:
-for /f "tokens=2 delims==" %%i in ('wmic cpu get loadpercentage /value ^| find "="') do set "cpu=%%i"
-echo     CPU Usage: %cpu%%%
+@REM echo [RECENT SYSTEM ERRORS]
+@REM echo -----------------------------------------------------------------------------
+@REM echo System Log Errors (Last 10):
+@REM wevtutil qe System /c:10 /rd:true /f:text /q:"*[System[(Level=1 or Level=2 or Level=3)]]" 2>nul | findstr /C:"Level" /C:"Date" /C:"Source" || echo No recent system errors
+@REM echo.
+@REM echo Application Log Errors (Last 10):
+@REM wevtutil qe Application /c:10 /rd:true /f:text /q:"*[System[(Level=1 or Level=2 or Level=3)]]" 2>nul | findstr /C:"Level" /C:"Date" /C:"Source" || echo No recent application errors
+@REM echo.
 
-:: Get memory usage
-for /f "tokens=4" %%i in ('tasklist /fi "imagename eq svchost.exe" ^| find "svchost.exe"') do set "mem=%%i"
-echo     Memory: %mempercent%%% used
-
-:: Get disk activity
-echo     Disk Activity:
-for /f "skip=1 tokens=1" %%a in ('wmic logicaldisk get caption') do (
-    if "%%a" neq "" (
-        for /f %%b in ('dir %%a\ ^| find "bytes free"') do echo       %%a Active
-    )
-)
-
-:: Top processes by memory
-echo.
-echo   Top Memory Consumers:
-tasklist /fo csv | sort /r /+5 | head -6 | findstr /v "Image Name"
-echo └───────────────────────────────────────────────────────────────────────────────┘
-echo.
-
-:: Security Status
-echo ┌─ SECURITY STATUS ─────────────────────────────────────────────────────────────┐
-echo   Windows Defender:
-powershell -command "try { $status = Get-MpComputerStatus; Write-Host '    Real-time Protection:' $status.RealTimeProtectionEnabled; Write-Host '    Antivirus Enabled:' $status.AntivirusEnabled; Write-Host '    Last Quick Scan:' $status.QuickScanStartTime } catch { Write-Host '    Status: Unable to retrieve' }"
-
-echo.
-echo   Firewall Status:
-netsh advfirewall show allprofiles state | findstr "State"
-
-echo.
-echo   User Account Control:
-reg query "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System" /v EnableLUA 2>nul | findstr "EnableLUA"
-echo └───────────────────────────────────────────────────────────────────────────────┘
+echo [HARDWARE SERIAL NUMBERS SUMMARY]
+echo -----------------------------------------------------------------------------
+echo System Serial Numbers:
+echo BIOS/System:
+wmic bios get SerialNumber /format:list | find "="
+echo Motherboard:
+wmic baseboard get SerialNumber /format:list | find "="
+echo CPU:
+wmic cpu get ProcessorId /format:list | find "="
+echo Memory Modules:
+wmic memorychip get DeviceLocator,SerialNumber /format:list | find "SerialNumber=" | find /v "SerialNumber="
+echo Hard Drives:
+wmic diskdrive get Model,SerialNumber /format:list | find "SerialNumber=" | find /v "SerialNumber="
 echo.
 
-:: System Health
-echo ┌─ SYSTEM HEALTH ───────────────────────────────────────────────────────────────┐
-echo   Windows Updates:
-powershell -command "try { $updates = Get-WmiObject -Class Win32_QuickFixEngineering | Sort-Object InstalledOn -Descending | Select-Object -First 3; foreach ($update in $updates) { Write-Host '    ' $update.HotFixID '-' $update.InstalledOn } } catch { Write-Host '    Unable to retrieve update info' }"
-
+echo [DRIVER STATUS]
+echo -----------------------------------------------------------------------------
+echo Checking for driver issues...
+driverquery /v 2>nul | findstr /i "unknown\|error\|warning" || echo No driver issues found
 echo.
-echo   System Uptime:
-for /f "tokens=2 delims==" %%i in ('wmic OS get LastBootUpTime /value ^| find "="') do set "boottime=%%i"
-powershell -command "$boot = [Management.ManagementDateTimeConverter]::ToDateTime('%boottime%'); $uptime = (Get-Date) - $boot; Write-Host '    ' $uptime.Days 'days,' $uptime.Hours 'hours,' $uptime.Minutes 'minutes'"
-
-echo.
-echo   Event Log Errors (Last 24h):
-for /f %%i in ('wevtutil qe System /c:1000 /rd:true /f:text /q:"*[System[TimeCreated[timediff(@SystemTime) <= 86400000] and (Level=1 or Level=2)]]" ^| find /c "Level:"') do echo     System Errors: %%i
-for /f %%i in ('wevtutil qe Application /c:1000 /rd:true /f:text /q:"*[System[TimeCreated[timediff(@SystemTime) <= 86400000] and (Level=1 or Level=2)]]" ^| find /c "Level:"') do echo     Application Errors: %%i
-
-echo.
-echo   Running Services:
-for /f %%i in ('sc query state^= all ^| find /c "RUNNING"') do echo     Active Services: %%i
-for /f %%i in ('sc query state^= all ^| find /c "STOPPED"') do echo     Stopped Services: %%i
-echo └───────────────────────────────────────────────────────────────────────────────┘
+echo USB Devices:
+wmic path win32_usbcontrollerdevice get Dependent /format:list 2>nul | find "=" | find "USB" || echo No USB devices found
 echo.
 
-:: Temperature and Power
-echo ┌─ THERMAL & POWER ─────────────────────────────────────────────────────────────┐
-echo   Power Profile:
-powercfg /getactivescheme | find "GUID"
-
-echo.
-echo   Battery Status:
-wmic path win32_battery get estimatedchargeremaining,estimatedruntime,batterystatus /format:list 2>nul | findstr /v "^$" || echo     No battery detected
-
-echo.
-echo   Thermal Zones:
-wmic /namespace:\\root\wmi path MSAcpi_ThermalZoneTemperature get CurrentTemperature,InstanceName /format:list 2>nul | findstr /v "^$" || echo     No thermal sensors available
-echo └───────────────────────────────────────────────────────────────────────────────┘
+echo [STARTUP PROGRAMS]
+echo -----------------------------------------------------------------------------
+wmic startup get Caption,Command,Location,User /format:table
 echo.
 
-:: Advanced Diagnostics
-echo ┌─ ADVANCED DIAGNOSTICS ────────────────────────────────────────────────────────┐
-echo   Hardware Compatibility:
-driverquery /v | findstr /i "error problem" || echo     No driver issues detected
-
-echo.
-echo   System File Integrity:
-sfc /verifyonly | findstr /i "found integrity violations" || echo     System files: OK
-
-echo.
-echo   Startup Performance:
-powershell -command "try { $boot = Get-WinEvent -FilterHashtable @{LogName='System'; ID=12} -MaxEvents 1; $kernel = Get-WinEvent -FilterHashtable @{LogName='System'; ID=27} -MaxEvents 1; Write-Host '    Last boot took:' ([datetime]$kernel.TimeCreated - [datetime]$boot.TimeCreated).TotalSeconds 'seconds' } catch { Write-Host '    Boot time data unavailable' }"
-
-echo.
-echo   Network Connectivity:
-ping -n 1 8.8.8.8 >nul && echo     Internet: Connected || echo     Internet: Disconnected
-ping -n 1 127.0.0.1 >nul && echo     Localhost: OK || echo     Localhost: Failed
-
-echo └───────────────────────────────────────────────────────────────────────────────┘
+echo [ENVIRONMENT VARIABLES]
+echo -----------------------------------------------------------------------------
+echo PATH=%PATH%
+echo TEMP=%TEMP%
+echo WINDIR=%WINDIR%
+echo PROCESSOR_ARCHITECTURE=%PROCESSOR_ARCHITECTURE%
+echo PROCESSOR_IDENTIFIER=%PROCESSOR_IDENTIFIER%
 echo.
 
-:: Critical Issues Detection
-echo ┌─ CRITICAL ISSUES DETECTION ───────────────────────────────────────────────────┐
-set "issues=0"
-
-:: Check disk space
-for /f "tokens=3" %%i in ('dir c:\ ^| find "bytes free"') do (
-    set "freespace=%%i"
-    set "freespace=!freespace:,=!"
-    if !freespace! lss 5368709120 (
-        echo   [WARNING] Low disk space on C: drive
-        set /a "issues+=1"
-    )
-)
-
-:: Check memory usage
-if %mempercent% gtr 90 (
-    echo   [WARNING] High memory usage: %mempercent%%%
-    set /a "issues+=1"
-)
-
-:: Check CPU usage
-if %cpu% gtr 90 (
-    echo   [WARNING] High CPU usage: %cpu%%%
-    set /a "issues+=1"
-)
-
-if %issues% equ 0 echo   No critical issues detected
-echo └───────────────────────────────────────────────────────────────────────────────┘
+echo [POWER AND THERMAL]
+echo -----------------------------------------------------------------------------
+echo Power Scheme:
+powercfg /getactivescheme
+echo.
+echo Power Configuration Details:
+powercfg /query SCHEME_CURRENT SUB_PROCESSOR PROCTHROTTLEMAX 2>nul | findstr "Current AC\|Current DC" || echo Power details unavailable
+echo.
+echo Thermal Information: 
+:: in kelvins
+wmic /namespace:\\root\wmi path MSAcpi_ThermalZoneTemperature get CurrentTemperature,InstanceName /format:list 2>nul | find "=" || echo Thermal sensors not available
+echo.
+echo Cooling Devices:
+wmic path win32_fan get Name,Status /format:table 2>nul || echo No fan information available
 echo.
 
-echo Diagnostics completed. Press any key to exit...
-pause >nul
+echo [NETWORK DIAGNOSTICS]
+echo -----------------------------------------------------------------------------
+echo Testing Network Connectivity:
+ping -n 2 127.0.0.1 | findstr "Reply\|Lost"
+ping -n 2 8.8.8.8 | findstr "Reply\|Lost"
+ping -n 2 1.1.1.1 | findstr "Reply\|Lost"
+echo.
+echo DNS Resolution Test:
+nslookup google.com 2>nul | findstr "Address" || echo DNS resolution failed
+echo.
+echo Network Statistics:
+netstat -e | findstr /C:"Bytes" /C:"Packets"
+echo.
+echo Active Network Connections:
+netstat -an | findstr "ESTABLISHED" | find /c "ESTABLISHED" 2>nul && echo Active connections found || echo No active connections
+echo.
+
+echo [REGISTRY STATUS]
+echo -----------------------------------------------------------------------------
+echo Checking registry size...
+dir "%WINDIR%\System32\config" | findstr /C:"SYSTEM" /C:"SOFTWARE" /C:"SAM" /C:"SECURITY"
+echo.
+
+echo [CONNECTED DEVICES]
+echo -----------------------------------------------------------------------------
+echo PCI Devices:
+wmic path win32_pnpentity where "DeviceID like 'PCI%%'" get Name,DeviceID /format:table 2>nul || echo PCI device info unavailable
+echo.
+echo USB Devices:
+wmic path win32_pnpentity where "DeviceID like 'USB%%'" get Name,DeviceID /format:table 2>nul || echo USB device info unavailable
+echo.
+
+echo [SYSTEM PERFORMANCE COUNTERS]
+echo -----------------------------------------------------------------------------
+echo Available Performance Counters:
+typeperf -qx 2>nul | findstr /C:"Processor" /C:"Memory" /C:"PhysicalDisk" | find /c "\" && echo Performance counters available || echo Performance counters unavailable
+echo.
+
+echo [SYSTEM SUMMARY]
+echo -----------------------------------------------------------------------------
+echo Computer Name: %COMPUTERNAME%
+echo Current User: %USERNAME%
+echo Domain: %USERDOMAIN%
+echo Logon Server: %LOGONSERVER%
+echo Architecture: %PROCESSOR_ARCHITECTURE%
+echo Number of Processors: %NUMBER_OF_PROCESSORS%
+echo System Root: %SYSTEMROOT%
+echo Current Directory: %CD%
+echo System Uptime: 
+systeminfo | findstr "System Boot Time"
+echo Current Time: %DATE% %TIME%
+echo.
+
+:: Keep window open
+pause
+cmd /k
